@@ -9,8 +9,7 @@ from dotenv import load_dotenv
 
 # Load environment variables from .env
 load_dotenv()
-print("BOT_TOKEN loaded:", bool(BOT_TOKEN))
-print("CHAT_ID loaded:", bool(CHAT_ID))
+
 
 
 # ---------------- CONFIG ----------------
@@ -24,9 +23,11 @@ VAR_LOW = 0.55              # Threshold to return to no-motion
 SUSTAIN_TIME = 5            # Seconds to confirm sustained motion
 END_TIME = 20               # Seconds without motion to close cycle
 
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
+print("BOT_TOKEN loaded:", bool(TELEGRAM_BOT_TOKEN))
+print("CHAT_ID loaded:", bool(TELEGRAM_CHAT_ID))
 # ----------------------------------------
 
 STATE_IDLE = 0
@@ -43,12 +44,12 @@ t_last_motion = None
 
 def send_telegram(message: str):
     """Send a message via Telegram bot."""
-    if not BOT_TOKEN or not CHAT_ID:
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         return
 
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {
-        "chat_id": CHAT_ID,
+        "chat_id": TELEGRAM_CHAT_ID,
         "text": message
     }
 
