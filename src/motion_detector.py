@@ -9,6 +9,9 @@ from dotenv import load_dotenv
 
 # Load environment variables from .env
 load_dotenv()
+print("BOT_TOKEN loaded:", bool(BOT_TOKEN))
+print("CHAT_ID loaded:", bool(CHAT_ID))
+
 
 # ---------------- CONFIG ----------------
 IFACE = "wlan0"
@@ -22,6 +25,8 @@ SUSTAIN_TIME = 5            # Seconds to confirm sustained motion
 END_TIME = 20               # Seconds without motion to close cycle
 
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+
 # ----------------------------------------
 
 STATE_IDLE = 0
