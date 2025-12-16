@@ -9,8 +9,8 @@ import os
 IFACE = "wlan0"
 INTERVAL = 0.1            # 10 Hz
 WINDOW_SIZE = 30          # ~3 s
-VAR_HIGH = 1.2            # movement detected state
-VAR_LOW = 0.6             # no movement detected state
+VAR_HIGH = 0.85            # movement detected state
+VAR_LOW = 0.55             # no movement detected state
 COOLDOWN_SEC = 10         # time between events
 # --------------------------------------------
 
