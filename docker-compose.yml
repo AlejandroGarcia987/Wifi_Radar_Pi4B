@@ -1,0 +1,23 @@
+version: "3.9"
+
+services:
+  wifi-radar:
+    container_name: wifi_radar
+    build: .
+    restart: unless-stopped
+
+    # Required to access wlan0 and RSSI info
+    network_mode: host
+
+    # Required for iw / netlink access
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+
+    env_file:
+      - .env
+
+    volumes:
+      - ./data:/app/data
+
+    command: python src/motion_detector.py

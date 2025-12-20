@@ -1,0 +1,14 @@
+# Environment variables
+.env
+
+# Python virtual environments
+venv/
+__pycache__/
+*.pyc
+
+# Runtime data
+data/
+src/data/
+
+# Docker local overrides (if any)
+*.local.yml
