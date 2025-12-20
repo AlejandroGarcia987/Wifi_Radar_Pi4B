@@ -30,6 +30,7 @@ print("BOT_TOKEN loaded:", bool(TELEGRAM_BOT_TOKEN))
 print("CHAT_ID loaded:", bool(TELEGRAM_CHAT_ID))
 # ----------------------------------------
 
+# ------- FSM states and RSSI Window -----
 STATE_IDLE = 0
 STATE_MOVING = 1
 STATE_MOVING_CONFIRMED = 2
@@ -40,6 +41,80 @@ rssi_window = deque(maxlen=WINDOW_SIZE)
 
 t_start_motion = None
 t_last_motion = None
+# ----------------------------------------
+
+# ------- Telegram control states -------- 
+SYSTEM_DISARMED = 0
+SYSTEM_ARMED = 1
+
+system_state = SYSTEM_DISARMED
+last_motion_ts = None
+
+TELEGRAM_POLL_INTERVAL = 3  # seconds
+last_update_id = None
+last_poll_time = 0
+# ----------------------------------------
+
+def poll_telegram_commands():
+    """Poll Telegram for new commands and update system state."""
+    global system_state, last_update_id
+
+    if not TELEGRAM_BOT_TOKEN:
+        return
+
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates"
+    params = {"timeout": 1}
+
+    if last_update_id is not None:
+        params["offset"] = last_update_id + 1
+
+    try:
+        response = requests.get(url, params=params, timeout=5).json()
+    except Exception:
+        return
+
+    if not response.get("ok"):
+        return
+
+    for update in response.get("result", []):
+        last_update_id = update["update_id"]
+
+        message = update.get("message")
+        if not message:
+            continue
+
+        chat_id = message["chat"]["id"]
+        text = message.get("text", "").strip().lower()
+
+        # Ignore messages from unknown chats
+        if str(chat_id) != str(TELEGRAM_CHAT_ID):
+            continue
+
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        if text == "/arm":
+            system_state = SYSTEM_ARMED
+            send_telegram(
+                f"System armed\n{timestamp}"
+            )
+
+        elif text == "/disarm":
+            system_state = SYSTEM_DISARMED
+            send_telegram(
+                f"System disarmed\n{timestamp}"
+            )
+
+        elif text == "/status":
+            state_str = "ARMED" if system_state == SYSTEM_ARMED else "DISARMED"
+            last_motion_str = (
+                last_motion_ts if last_motion_ts else "No motion yet"
+            )
+
+            send_telegram(
+                f"Status: {state_str}\n"
+                f"Last motion: {last_motion_str}\n"
+                f"{timestamp}"
+            )
 
 
 def send_telegram(message: str):
@@ -77,6 +152,12 @@ def get_rssi():
 print("WiFi motion detector with Telegram notifications started")
 
 while True:
+    now_time = time.time()
+    # Poll Telegram commands at defined intervals
+    if now_time - last_poll_time >= TELEGRAM_POLL_INTERVAL:
+        poll_telegram_commands()
+        last_poll_time = now_time
+    # -------------------------------------
     rssi = get_rssi()
     now = time.time()
 
@@ -96,12 +177,15 @@ while True:
                 state = STATE_MOVING
                 t_start_motion = now
                 t_last_motion = now
+                last_motion_ts = timestamp
 
-                send_telegram(
-                    f"Motion detected!\n"
-                    f"{timestamp}\n"
-                    f"Variance: {var:.2f}"
-                )
+                if system_state == SYSTEM_ARMED:
+                    send_telegram(
+                        f"Motion detected!\n"
+                        f"{timestamp}\n"
+                        f"Variance: {var:.2f}"
+                    )
+
 
         elif state == STATE_MOVING:
             if var > VAR_LOW:
@@ -109,18 +193,20 @@ while True:
 
                 if now - t_start_motion >= SUSTAIN_TIME:
                     state = STATE_MOVING_CONFIRMED
-                    send_telegram(
-                        f"Motion still detected\n"
-                        f"{timestamp}\n"
-                        f"Variance: {var:.2f}"
-                    )
+                    if system_state == SYSTEM_ARMED:
+                        send_telegram(
+                            f"Motion still detected\n"
+                            f"{timestamp}\n"
+                            f"Variance: {var:.2f}"
+                        )
 
             elif now - t_last_motion >= END_TIME:
                 state = STATE_IDLE
-                send_telegram(
-                    f"No motion detected\n"
-                    f"{timestamp}"
-                )
+                if system_state == SYSTEM_ARMED:
+                    send_telegram(
+                        f"No motion detected\n"
+                        f"{timestamp}"
+                    )
 
         elif state == STATE_MOVING_CONFIRMED:
             if var > VAR_LOW:
@@ -128,10 +214,11 @@ while True:
 
             elif now - t_last_motion >= END_TIME:
                 state = STATE_IDLE
-                send_telegram(
-                    f"No motion detected\n"
-                    f"{timestamp}"
-                )
+                if system_state == SYSTEM_ARMED:
+                    send_telegram(
+                        f"No motion detected\n"
+                        f"{timestamp}"
+                    )
         # -------------------------------------
 
         print(f"{timestamp} VAR={var:.2f} STATE={state}")
