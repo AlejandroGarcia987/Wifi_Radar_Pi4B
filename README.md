@@ -141,16 +141,38 @@ At the time of writing, the project provides:
 - Telegram notifications with a complete motion lifecycle
 - Secure handling of secrets via environment variables
 
+The following features are **currently implemented**:
+
+- WiFi-based motion detection using RSSI variance
+- Finite state machine with hysteresis to avoid false positives
+- Telegram notifications covering the full motion lifecycle
+- Secure handling of secrets via environment variables
+- Docker-based deployment using docker-compose
+- Background execution as a containerized service
+
 The following features are **intentionally not implemented yet**:
 
-- Docker-based deployment
-- Automatic startup (systemd service)
 - Remote arming / disarming
 - Baseline auto-calibration
+- Integration with external sensors or cameras
 
-These features are planned as future improvements once the detection logic is considered stable.
+These features are planned as future improvements once the detection logic and thresholds are considered stable.
 
 ---
+
+## Containerized deployment
+
+The detector can be started and stopped using Docker Compose:
+
+```bash
+docker compose up -d
+docker compose down
+```
+
+Logs can be inspected using:
+```bash
+docker compose logs -f
+```
 
 ## Example Telegram notifications
 
@@ -158,4 +180,5 @@ The following image shows a small demonstration of the notification flow during 
 The timestamps and variance values shown correspond to real motion events detected during testing.
 
 <img width="500" height="700" alt="motion_detector_bot" src="https://github.com/user-attachments/assets/cd0689d0-a6b5-4809-af5c-9d6f1eafea36" />
+
 
