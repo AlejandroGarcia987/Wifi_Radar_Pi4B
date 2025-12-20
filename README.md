@@ -105,16 +105,30 @@ TELEGRAM_BOT_TOKEN=your_bot_token_here
 TELEGRAM_CHAT_ID=your_chat_id_here
 ```
 
-At the current stage, the system is intended to be executed **directly on a Raspberry Pi**.
+At the current stage, the system is intended to be executed **on a Raspberry Pi** with direct access to its WiFi interface.
 
-The detector relies on direct access to the WiFi interface (`iw dev wlan0 link`) and has been tested in a native Linux environment running on the Raspberry Pi itself. For this reason, the project is **not yet containerized** and is **not running as a system service**.
+The detector relies on native access to the WiFi stack (`iw dev wlan0 link`) and has been validated in a Raspberry Pi Linux environment.
 
-The execution model is intentionally simple at this stage:
-- The script is launched manually
-- It runs continuously while the terminal session is active
-- Configuration is provided through environment variables (`.env`)
+---
 
-This allows rapid experimentation, tuning, and observation of signal behavior before introducing additional abstraction layers.
+## Execution model
+
+The project is now **fully containerized using Docker**, allowing it to run as a background service without requiring an active terminal session.
+
+The recommended execution model is:
+
+- Run the detector inside a Docker container
+- Use `docker-compose` to start and stop the service
+- Provide configuration and secrets through environment variables (`.env`)
+- Access logs using standard Docker tooling
+
+This approach provides:
+- Clean isolation of dependencies
+- Easy start / stop control
+- Reproducible deployment
+- No impact on the host Python environment
+
+The container is executed using **host networking** in order to access the WiFi interface directly.
 
 ---
 
@@ -127,16 +141,38 @@ At the time of writing, the project provides:
 - Telegram notifications with a complete motion lifecycle
 - Secure handling of secrets via environment variables
 
+The following features are **currently implemented**:
+
+- WiFi-based motion detection using RSSI variance
+- Finite state machine with hysteresis to avoid false positives
+- Telegram notifications covering the full motion lifecycle
+- Secure handling of secrets via environment variables
+- Docker-based deployment using docker-compose
+- Background execution as a containerized service
+
 The following features are **intentionally not implemented yet**:
 
-- Docker-based deployment
-- Automatic startup (systemd service)
 - Remote arming / disarming
 - Baseline auto-calibration
+- Integration with external sensors or cameras
 
-These features are planned as future improvements once the detection logic is considered stable.
+These features are planned as future improvements once the detection logic and thresholds are considered stable.
 
 ---
+
+## Containerized deployment
+
+The detector can be started and stopped using Docker Compose:
+
+```bash
+docker compose up -d
+docker compose down
+```
+
+Logs can be inspected using:
+```bash
+docker compose logs -f
+```
 
 ## Example Telegram notifications
 
@@ -144,3 +180,5 @@ The following image shows a small demonstration of the notification flow during 
 The timestamps and variance values shown correspond to real motion events detected during testing.
 
 <img width="500" height="700" alt="motion_detector_bot" src="https://github.com/user-attachments/assets/cd0689d0-a6b5-4809-af5c-9d6f1eafea36" />
+
+
