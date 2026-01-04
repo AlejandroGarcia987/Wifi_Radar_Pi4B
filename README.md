@@ -90,7 +90,22 @@ Each message includes:
 - Timestamp
 - RSSI variance value
 
-This is a **push-only** bot (no incoming commands). Therefore, Telegram Bot TOKEN and CHAT ID are required. 
+### Telegram control commands
+
+The bot initially started as a push-only notification mechanism for motion events.
+Now it is possible to send several commands to get information about the status and arm/disarm the system as it follows:
+
+- `/status`  
+  Returns the current system state (ARMED / DISARMED) and the timestamp of the
+  last detected motion event.
+
+- `/arm`  
+  Arms the detection system. Motion events will generate Telegram notifications
+  and may trigger image capture when implemented.
+
+- `/disarm`  
+  Disarms the detection system. Motion is still internally detected, but no
+  notifications or actions are triggered.
 
 ---
 
@@ -131,6 +146,121 @@ This approach provides:
 The container is executed using **host networking** in order to access the WiFi interface directly.
 
 ---
+## ESP32-CAM integration and network considerations (Work In Progress)
+
+As an optional extension to the WiFi-based motion detector, an
+event-driven image capture mechanism using an ESP32-CAM (AI Thinker, OV2640)
+is currently being developed.
+
+The firmware used is the standard **Arduino IDE** ESP32 example called
+**CameraWebServer**, with minimal modifications that will be explained below.
+
+The camera is not used for continuous monitoring. Instead, it acts as a
+**reactive sensor**, triggered only when motion is detected by the WiFi RSSI
+analysis running on the Raspberry Pi.
+
+Although a vision-based motion detection system could be implemented,
+the goal of this integration is to evaluate the viability and robustness
+of combining WiFi-based detection with on-demand image capture.
+
+### Network topology problem
+
+In the current setup, the ESP32-CAM is connected to a 2.4 GHz WiFi repeater,
+while the Raspberry Pi is connected to the main WiFi network.
+
+For reasons that are not fully understood (likely related to hardware or
+driver limitations), the ESP32-CAM fails to connect reliably to the main router.
+This was verified through several configuration attempts.
+
+Since this router is shared in a household environment, extensive changes
+to its configuration were intentionally avoided.
+
+As a consequence, the following issues arise:
+
+- The Raspberry Pi cannot reliably access the ESP32-CAM HTTP endpoint (`/capture`)
+- Connectivity depends on repeater-specific routing behavior
+- The system becomes tightly coupled to the network topology
+
+### Design decision: camera-initiated image push
+
+To decouple the system from network constraints, the architecture was reversed:
+
+- The ESP32-CAM actively pushes images to the Raspberry Pi
+- The Raspberry Pi exposes a lightweight HTTP image receiver service
+- Images are sent only when explicitly requested by the detector logic
+
+This approach removes any dependency on:
+
+- Direct Pi → camera connectivity
+- Repeater routing behavior
+- Static IP assumptions for the ESP32-CAM
+  
+### Implementation overview
+
+- The Raspberry Pi runs a minimal HTTP server (`image_server.py`)
+- The server listens for `POST /upload` requests
+- Incoming JPEG frames are stored locally with timestamped filenames
+- The ESP32-CAM sends the captured frame directly to the Pi after each capture
+
+To support this approach, minor modifications were introduced in the
+**CameraWebServer** firmware.
+
+In **CameraWebServer.ino**, a new function was added:
+
+```cpp
+void sendImageToPi(camera_fb_t *fb) {
+  if (!fb || fb->len == 0) return;
+
+  HTTPClient http;
+  WiFiClient client;
+
+  // Raspberry Pi IP address and port
+  const char *pi_url = "http://xxx.xxx.x.xx:xxxx/upload"; 
+  // Port 8081 in my case, as defined in image_server.py
+
+  http.begin(client, pi_url);
+  http.addHeader("Content-Type", "image/jpeg");
+
+  int httpResponseCode = http.POST(fb->buf, fb->len);
+
+  Serial.print("POST image to Pi -> ");
+  Serial.println(httpResponseCode);
+
+  http.end();
+}
+```
+This function is then invoked inside
+static esp_err_t capture_handler(httpd_req_t *req)
+in app_httpd.cpp, immediately after a successful frame capture:
+
+```cpp
+if (!fb) {
+  log_e("Camera capture failed");
+  httpd_resp_send_500(req);
+  return ESP_FAIL;
+}
+
+sendImageToPi(fb); // Push image to Raspberry Pi
+
+httpd_resp_set_type(req, "image/jpeg");
+```
+### Architectural advantages
+
+This approach provides several benefits:
+
+- Network-agnostic: works across subnets and repeaters
+- Decoupled components: camera and detector are loosely coupled
+- Event-driven: images are captured only when motion is detected
+- Low bandwidth usage: no continuous streaming
+
+As mentioned above, this feature is still a work in progress.
+At this stage, the network limitations have been resolved and the initial
+architecture for testing has been implemented.
+
+The next step is to fully integrate this mechanism into the detector FSM
+and align image capture with the motion detection lifecycle.
+
+---
 
 ### Current project status
 
@@ -140,6 +270,7 @@ At the time of writing, the project provides:
 - A finite state machine with hysteresis to avoid false positives
 - Telegram notifications with a complete motion lifecycle
 - Secure handling of secrets via environment variables
+- An experimental event-driven image capture pipeline (ESP32-CAM → Raspberry Pi)
 
 The following features are **currently implemented**:
 
@@ -149,12 +280,13 @@ The following features are **currently implemented**:
 - Secure handling of secrets via environment variables
 - Docker-based deployment using docker-compose
 - Background execution as a containerized service
+- Push-based image upload from an ESP32-CAM to the Raspberry Pi (experimental)
 
 The following features are **intentionally not implemented yet**:
 
-- Remote arming / disarming
 - Baseline auto-calibration
-- Integration with external sensors or cameras
+- Full integration of image capture into the detector FSM
+- Vision-based motion detection or image processing
 
 These features are planned as future improvements once the detection logic and thresholds are considered stable.
 
@@ -180,5 +312,6 @@ The following image shows a small demonstration of the notification flow during 
 The timestamps and variance values shown correspond to real motion events detected during testing.
 
 <img width="500" height="700" alt="motion_detector_bot" src="https://github.com/user-attachments/assets/cd0689d0-a6b5-4809-af5c-9d6f1eafea36" />
+
 
 
