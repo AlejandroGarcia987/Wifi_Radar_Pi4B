@@ -6,6 +6,8 @@ import statistics
 import os
 import requests
 from dotenv import load_dotenv
+from camera_utils import capture_image
+
 
 # Load environment variables from .env
 load_dotenv()
@@ -54,6 +56,25 @@ TELEGRAM_POLL_INTERVAL = 3  # seconds
 last_update_id = None
 last_poll_time = 0
 # ----------------------------------------
+
+def send_telegram_photo(image_path, caption=None):
+    """Send a photo via Telegram bot."""
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        return
+
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto"
+
+    try:
+        with open(image_path, "rb") as img:
+            files = {"photo": img}
+            data = {"chat_id": TELEGRAM_CHAT_ID}
+            if caption:
+                data["caption"] = caption
+
+            requests.post(url, files=files, data=data, timeout=10)
+    except Exception as e:
+        print(f"Failed to send photo: {e}")
+
 
 def poll_telegram_commands():
     """Poll Telegram for new commands and update system state."""
@@ -185,7 +206,10 @@ while True:
                         f"{timestamp}\n"
                         f"Variance: {var:.2f}"
                     )
-
+                # Capture and send image
+                image = capture_image()
+                if image:
+                    send_telegram_photo(image, caption=f"Motion detected at {timestamp}")
 
         elif state == STATE_MOVING:
             if var > VAR_LOW:
@@ -198,6 +222,12 @@ while True:
                             f"Motion still detected\n"
                             f"{timestamp}\n"
                             f"Variance: {var:.2f}"
+                        )
+                    image = capture_image()
+                    if image:
+                        send_telegram_photo(
+                            image,
+                            caption=f"Motion still detected\n{timestamp}\nVar: {var:.2f}"
                         )
 
             elif now - t_last_motion >= END_TIME:
